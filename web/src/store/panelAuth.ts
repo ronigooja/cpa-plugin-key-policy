@@ -6,7 +6,7 @@
 // through a reversible XOR+base64 obfuscation (see the panel's
 // src/utils/encryption.ts). Because the panel and this plugin resource are
 // same-origin (both served by CPA), they share the SAME localStorage and the
-// SAME obfuscation key (host + userAgent are identical), so we can decode the
+// SAME obfuscation key (host, plus userAgent for legacy v1), so we can decode the
 // panel's stored blob here and skip a second login.
 //
 // SECURITY: This only reads the panel's already-persisted key; it never writes
@@ -15,7 +15,8 @@
 // "cli-proxy-auth", so a malicious site embedding this plugin cannot read the
 // panel key. We additionally gate on window.self !== window.top (embedded only).
 
-const ENC_PREFIX = "enc::v1::";
+const ENC_PREFIX = "enc::v2::";
+const LEGACY_ENC_PREFIX = "enc::v1::";
 const SECRET_SALT = "cli-proxy-api-webui::secure-storage";
 const STORAGE_KEY = "cli-proxy-auth";
 
@@ -24,7 +25,7 @@ export interface PanelAuth {
   managementKey: string;
 }
 
-let cachedKeyBytes: Uint8Array | null = null;
+const cachedKeyBytes = new Map<boolean, Uint8Array>();
 
 function encodeText(text: string): Uint8Array {
   return new TextEncoder().encode(text);
@@ -34,20 +35,24 @@ function decodeText(bytes: Uint8Array): string {
   return new TextDecoder().decode(bytes);
 }
 
-// Mirrors the panel's getKeyBytes(): `${SECRET_SALT}|${host}|${userAgent}`.
-function getKeyBytes(): Uint8Array {
-  if (cachedKeyBytes) return cachedKeyBytes;
+// v2 uses salt + host; only legacy v1 includes the user agent.
+function getKeyBytes(legacy = false): Uint8Array {
+  const cached = cachedKeyBytes.get(legacy);
+  if (cached) return cached;
+  let bytes: Uint8Array;
   try {
-    cachedKeyBytes = encodeText(`${SECRET_SALT}|${window.location.host}|${navigator.userAgent}`);
+    const key = `${SECRET_SALT}|${window.location.host}`;
+    bytes = encodeText(legacy ? `${key}|${navigator.userAgent}` : key);
   } catch {
-    cachedKeyBytes = encodeText(SECRET_SALT);
+    bytes = encodeText(SECRET_SALT);
   }
-  return cachedKeyBytes;
+  cachedKeyBytes.set(legacy, bytes);
+  return bytes;
 }
 
 // Exposed for tests: clear the cached key so a changed host/userAgent is used.
 export function _resetKeyCache(): void {
-  cachedKeyBytes = null;
+  cachedKeyBytes.clear();
 }
 
 function xorBytes(data: Uint8Array, keyBytes: Uint8Array): Uint8Array {
@@ -83,10 +88,13 @@ export function obfuscateData(value: string): string {
 
 // Deobfuscation, identical to the panel's deobfuscateData().
 export function deobfuscateData(payload: string): string {
-  if (!payload || !payload.startsWith(ENC_PREFIX)) return payload;
+  if (!payload) return payload;
+  const legacy = payload.startsWith(LEGACY_ENC_PREFIX);
+  if (!legacy && !payload.startsWith(ENC_PREFIX)) return payload;
   try {
-    const encrypted = fromBase64(payload.slice(ENC_PREFIX.length));
-    return decodeText(xorBytes(encrypted, getKeyBytes()));
+    const prefix = legacy ? LEGACY_ENC_PREFIX : ENC_PREFIX;
+    const encrypted = fromBase64(payload.slice(prefix.length));
+    return decodeText(xorBytes(encrypted, getKeyBytes(legacy)));
   } catch {
     return payload;
   }

@@ -138,6 +138,11 @@ a:hover { color: var(--accent-2); text-decoration: underline; }
  * Mobile keeps the old .header (stacked) via the max-width block. */
 .app { max-width: 1200px; margin: 0 auto; padding: 24px 24px 80px; }
 
+/* Embedded pages keep content and sticky headers below the host's exit bar.
+ * Standalone pages retain their existing spacing and sticky positions. */
+.panel-embed { --panel-top-clearance: 64px; padding-top: var(--panel-top-clearance); }
+.panel-embed .topnav, .panel-embed .header { top: var(--panel-top-clearance); }
+
 /* Top horizontal nav (desktop). Mirrors the Stitch 'Quiet Paper' design:
  * paper bg, bottom border, left = title + base url, right = nav + actions. */
 .topnav {

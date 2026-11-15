@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useNavigate, Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { isAuthed, subscribe, clearSession, getSession, bootstrapFromPanel } from "./store/session";
+import { isEmbedded } from "./store/panelAuth";
 import { useT } from "./i18n";
 import Login from "./pages/Login";
 import KeyList from "./pages/KeyList";
@@ -104,9 +105,11 @@ function Shell() {
 }
 
 export default function App() {
-  return (
+  const routes = (
     <Routes>
       <Route path="/*" element={<Shell />} />
     </Routes>
   );
+  // Reserve space for the host panel's exit bar only when embedded.
+  return isEmbedded() ? <div className="panel-embed">{routes}</div> : routes;
 }

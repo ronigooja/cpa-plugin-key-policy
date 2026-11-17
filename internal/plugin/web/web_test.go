@@ -25,6 +25,16 @@ func TestServeIndex(t *testing.T) {
 	}
 }
 
+func TestServeIndexIncludesPanelAuthV2(t *testing.T) {
+	status, _, body := Serve("/index.html")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	if !contains(body, "enc::v2::") {
+		t.Fatal("embedded index.html is missing enc::v2::; rerun the frontend build and commit internal/plugin/web/dist/index.html")
+	}
+}
+
 func TestServeTrailingSlashTrimmed(t *testing.T) {
 	status, _, _ := Serve("/index.html/")
 	if status != http.StatusOK {
